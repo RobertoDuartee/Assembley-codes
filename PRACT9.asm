@@ -1,0 +1,305 @@
+.ORG 0
+.INCLUDE "m16def.inc"
+
+LDI R16,HIGH(RAMEND)
+OUT SPH,R16
+LDI R16,LOW(RAMEND)
+OUT SPL,R16
+
+;LCD
+SER R16
+OUT DDRA,R16
+
+;SWITCHES
+CBI DDRD,0
+CBI DDRD,1
+
+;ENTRADA DEL CONTADOR
+CBI DDRB,1
+
+
+AGAIN:
+SBRS PIND,0
+RJMP SW0
+
+SBRS PIND,1
+RJMP SW1
+
+RJMP AGAIN
+
+SW0:
+LDI R16,0
+OUT TCCR1A,R16
+LDI R16,0X0E
+OUT TCCR1B,R16
+CALL Tdelay2ms
+IN BIN_LSB,TCNT1AL
+IN BIN_MSB,TCNT1AH
+
+
+
+SW1:
+
+
+
+
+;CONTADOR
+
+
+;-------------------CODIGOS NECESARIOS PARA EL LCD (INICIALIZACION Y COMANDOS)--------------
+
+;--------------------INCIALIZAR
+INICIAR:
+
+LDI R26,0X28
+
+;PRIMER 0X28
+MOV R16,R26
+CBR R16,0b00001111
+OUT PORTA,R16
+SBI PORTA,2
+CALL delay40us
+CBI PORTA,2
+CALL delay40us
+
+;SEGUNDO 0X28 NIBBLE ALTO
+OUT PORTA,R16
+SBI PORTA,2
+CALL delay40us
+CBI PORTA,2
+CALL delay40us
+
+;SEGUNDO 0X28 NIBBLE BAJO
+MOV R16,R26
+SWAP R16
+CBR R16,0b00001111
+OUT PORTA,R16
+SBI PORTA,2
+CALL delay40us
+CBI PORTA,2
+CALL delay40us
+
+CALL delay10ms
+
+;NIBBLE ALTO 0X0F
+LDI R26,0b00001100
+MOV R16,R26
+CBR R16,0b00001111
+OUT PORTA,R16
+SBI PORTA,2
+CALL delay40us
+CBI PORTA,2
+CALL delay40us
+NOP
+
+;NIBBLE BAJO 0X0F
+MOV R16,R26
+SWAP R16
+CBR R16,0b00001111
+OUT PORTA,R16
+SBI PORTA,2
+CALL delay40us
+CBI PORTA,2
+CALL delay40us
+CALL delay10ms
+
+;NIBBLE ALTO 0X01
+LDI R26,0X01
+MOV R16,R26
+CBR R16,0b00001111
+OUT PORTA,R16
+SBI PORTA,2
+CALL delay40us
+CBI PORTA,2
+CALL delay40us
+NOP
+
+;NIBBLE BAJO 0X01
+MOV R16,R26
+SWAP R16
+CBR R16,0b00001111
+OUT PORTA,R16
+SBI PORTA,2
+CALL delay40us
+CBI PORTA,2
+CALL delay10ms
+RET
+
+
+;--------------------------------DESPLAZAR
+DESPLAZAR:
+;NIBBLE ALTO
+MOV R16,R27
+;LDI R16,0b00010100
+CBR R16,0b00001111
+OUT PORTA,R16
+SBI PORTA,2
+CALL delay40us
+CBI PORTA,2
+
+;NIBBLE BAJO
+;LDI R16,0b00010100
+MOV R16,R27
+SWAP R16
+CBR R16,0b00001111
+OUT PORTA,R16
+SBI PORTA,2
+CALL delay40us
+CBI PORTA,2
+RET
+
+;--------------------------DISPLAY
+
+DISPLAY:
+;NIBBLE ALTO
+;E,RW,RS
+
+MOV R24,R25
+CBR R24,0b00001111
+OUT PORTA,R24
+SBI PORTA,0
+SBI PORTA,2
+CALL delay40us
+CBI PORTA,2
+CALL delay40us
+
+;NIBBLE BAJO
+
+MOV R24,R25
+SWAP R24
+CBR R24,0b00001111
+OUT PORTA,R24
+SBI PORTA,0
+SBI PORTA,2
+CALL delay40us
+CBI PORTA,2
+CALL delay40us
+RET
+
+
+;-------------------------CLEAR DISPLAY
+CLEARDISP:
+;NIBBLE ALTO 0X01
+LDI R26,0X01
+MOV R16,R26
+CBR R16,0b00001111
+OUT PORTA,R16
+SBI PORTA,2
+CALL delay40us
+CBI PORTA,2
+CALL delay40us
+NOP
+
+;NIBBLE BAJO 0X01
+MOV R16,R26
+SWAP R16
+CBR R16,0b00001111
+OUT PORTA,R16
+SBI PORTA,2
+CALL delay40us
+CBI PORTA,2
+CALL delay10ms
+RET
+
+
+;----------------------NULLDISP
+NULLDISP:
+CALL DESPLAZAR
+LDI R25,0X00
+CALL DISPLAY
+RET
+
+;----------------------------------DELAYS----------------------------
+delay10ms:
+	LDI R20,104
+	ciclo2:
+	LDI R21,255
+		ciclo1:
+			DEC R21
+			BRNE ciclo1
+		DEC R20
+		BRNE ciclo2
+	RET
+
+delay100ms:
+	LDI R18,10
+	ciclo3:
+		CALL delay10ms
+		DEC R18
+		BRNE ciclo3
+	RET
+;
+
+delay40us:
+	LDI R22,103
+	ciclo:
+		DEC R22
+		BRNE ciclo
+	RET
+
+
+Tdelay2ms:
+LDI R16,78
+OUT OCR0,R16
+LDI R16,0b00001101
+OUT TCCR0,R16
+
+POLLING:
+IN R16,TIFR
+SBRS R16,OCF0
+RJMP POLLING
+
+CLR R16
+OUT TCCR0,R16
+LDI R16,1<<OCF0
+OUT TIFR,R16
+
+RET
+
+;------------------------------------BINTOBCD-------------------------
+;-- registros de donde se tomará el número binario a transformar
+.def BIN_LSB=R22
+.def BIN_MSB=R23
+
+ldi r16,low(RAMEND)
+out SPL,r16
+ldi r16,high(RAMEND)
+out SPH,r16	     ;init Stack Pointer
+
+CALL BIN_BCD
+
+FIN:RJMP FIN
+
+;-- Espacio de memoria en RAM donde se guarda el número convertido en BCD
+BIN_BCD: CLR R16
+         STS 0x60,R16
+	     STS 0x61,R16
+	     STS 0x62,R16
+	     STS 0x63,R16
+
+    otro:  CPI BIN_LSB,0
+           BRNE INC_BCD
+           CPI BIN_MSB,0
+           BRNE INC_BCD
+           RET
+
+;-- lógica: se incrementa el número BCD mientras se decrementa el binario hasta que sea 0.
+  INC_BCD: LDI R17,0
+	      LDI YL,0x63
+	      LDI YH,0
+
+     ciclo: LD R20,Y
+            inc R20
+	      ST Y,R20
+	      CPI R20,10
+	      BRNE DEC_BIN
+	      ST Y, R17
+	      DEC YL
+	      CPI YL,0x5F
+	      BRNE ciclo
+
+DEC_BIN: DEC BIN_LSB
+         CPI BIN_LSB,0xFF
+         BRNE otro
+         DEC BIN_MSB
+         RJMP otro
